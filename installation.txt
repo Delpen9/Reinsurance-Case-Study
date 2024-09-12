@@ -1,0 +1,18 @@
+1. Update the package list:
+   sudo apt-get update
+
+2. Upgrade installed packages:
+   sudo apt-get upgrade
+
+3. Edit the sources list to change the repository mirror:
+   sudo nano /etc/apt/sources.list
+
+4. Replace the repository URL:
+   In the /etc/apt/sources.list file, replace the current URL with:
+   http://archive.ubuntu.com/ubuntu/
+
+5. Install aptitude:
+   sudo apt-get install aptitude
+
+6. Use aptitude to install r-base:
+   sudo aptitude install r-base
