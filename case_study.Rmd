@@ -178,3 +178,19 @@ industry_counts <- combined_data %>%
 # View the result
 print(industry_counts)
 ```
+
+```{r}
+# Calculate mean, standard deviation, and quantiles for each industry group
+summary_stats <- combined_data %>%
+  group_by(Industry_Group) %>%
+  summarize(
+    mean_value = mean(DeathSI, na.rm = TRUE),
+    sd_value = sd(DeathSI, na.rm = TRUE),
+    q25 = quantile(DeathSI, 0.25, na.rm = TRUE),
+    median_value = median(DeathSI, na.rm = TRUE),
+    q75 = quantile(DeathSI, 0.75, na.rm = TRUE)
+  )
+
+# View the result
+print(summary_stats)
+```
