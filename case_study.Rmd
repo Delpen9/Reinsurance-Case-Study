@@ -1,9 +1,9 @@
 ---
 title: "Case Study"
-output: case_study
+output: pdf_document
 ---
 
-Load in the important libraries.
+*Load in the important libraries.*
 
 ```{r}
 library(tidyverse)
@@ -13,9 +13,9 @@ library(ggplot2)
 library(lubridate)
 ```
 
-## **Problem 1 – Data handling, analysis and plotting**
+## ***Problem 1 – Data handling, analysis and plotting***
 
-The first problem of the case study builds on the data in the files p01-02_portfolio.csv and p01-02_rates.csv. One file contains membership information for a Group Life portfolio and one has information on the rates which should be charged.
+*The first problem of the case study builds on the data in the files p01-02_portfolio.csv and p01-02_rates.csv. One file contains membership information for a Group Life portfolio and one has information on the rates which should be charged.*
 
 ```{r}
 # Load the CSV file
@@ -31,17 +31,15 @@ head(portfolio_data)
 
 ```{r}
 # Load the CSV file
-rates_data <- read_delim(
-  "Case Study/data/p01-02_rates.csv",
-  delim = ";",
-  show_col_types = FALSE
-)
+rates_data <- read_delim("Case Study/data/p01-02_rates.csv",
+                         delim = ";",
+                         show_col_types = FALSE)
 
 # View the data
 head(rates_data)
 ```
 
-rates_data
+*rates_data*
 
 ```{r}
 # Count occurrences of each combination of Gender and Age
@@ -59,9 +57,9 @@ if (nrow(duplicates) == 0) {
 }
 ```
 
-### **Question a.**
+### ***Question a.***
 
-Read the data from the two files into R’s memory. The rates are applicable to each individual in the portfolio, depending on that individual’s age and gender. Combine the two datasets into a single table by looking up the rate for each line of the portfolio.
+*Read the data from the two files into R’s memory. The rates are applicable to each individual in the portfolio, depending on that individual’s age and gender. Combine the two datasets into a single table by looking up the rate for each line of the portfolio.*
 
 ```{r}
 # Step 1: Convert the Date.of.Birth column to Date format
@@ -76,45 +74,107 @@ head(portfolio_data)
 
 ```{r}
 # Inner join the two datasets
-joined_data <- inner_join(
-  portfolio_data,
-  rates_data,
-  by = c("age" = "Age", "Gender" = "Gender"),
+combined_data <- inner_join(portfolio_data,
+                            rates_data,
+                            by = c("age" = "Age", "Gender" = "Gender"),
 )
 
 # Check if the row count of the joined data matches the original portfolio data
-if (nrow(joined_data) == nrow(portfolio_data)) {
-  message("Sanity Check Passed: The row count of joined_data matches portfolio_data.")
+if (nrow(combined_data) == nrow(portfolio_data)) {
+  message("Sanity Check Passed: The row count of combined_data matches portfolio_data.")
 } else {
-  message("Sanity Check Failed: The row count of joined_data does not match portfolio_data.")
+  message("Sanity Check Failed: The row count of combined_data does not match portfolio_data.")
   message("Rows in portfolio_data: ", nrow(portfolio_data))
-  message("Rows in joined_data: ", nrow(joined_data))
+  message("Rows in combined_data: ", nrow(combined_data))
 }
-
-# View the result
-head(joined_data)
 ```
 
-#### Investigate missing matches
+*This sanity check is expected to fail because the rates data is cutoff at 70. Do not consider people over 70 in this analysis.*
+
+#### *Investigate missing matches*
 
 ```{r}
 # Find rows in portfolio_data that do not have a match in rates_data
-missing_matches <- anti_join(
-  portfolio_data, rates_data,
-  by = c("age" = "Age", "Gender" = "Gender")
-)
+missing_matches <- anti_join(portfolio_data,
+                             rates_data,
+                             by = c("age" = "Age", "Gender" = "Gender"))
 
 # Check how many rows are missing
 nrow(missing_matches)
 ```
 
-### **Question b.**
+### ***Question b.***
 
-Group the Industry field into common-sense based groupings and determine the mean, standard deviation and quantiles of DeathSI for each of your industry groups.
-
-### Convert to PDF
+*Group the Industry field into common-sense based groupings and determine the mean, standard deviation and quantiles of DeathSI for each of your industry groups.*
 
 ```{r}
-# Convert notebook to .pdf
-rmarkdown::render("case_study.Rmd", output_format = "pdf_document")
+industry_counts <- combined_data %>%
+  count(Industry) %>%
+  arrange(desc(n))
+
+# View the result
+print(industry_counts)
+```
+
+```{r}
+combined_data <- combined_data %>%
+  mutate(
+    Industry_Group = case_when(
+      Industry %in% c("Government & Public Administration", "Ex-Services Club") ~ "Government and Public Services",
+      Industry %in% c(
+        "Sporting Club",
+        "Golf Club",
+        "Bowls Club",
+        "Registered Club",
+        "Surf Life Saving Club",
+        "Workers Club",
+        "Australian Rules Football Club",
+        "Leagues Club",
+        "Associated with Club Industry"
+      ) ~ "Clubs and Associations",
+      Industry %in% c(
+        "BSS-Business Services",
+        "FIN-Finance & Insurance",
+        "Professional Services",
+        "LAW-Solicitors/Barrister",
+        "ENG-Engineers",
+        "MGE-Medical Services Gen"
+      ) ~ "Professional and Business Services",
+      Industry %in% c(
+        "MAN-Manufacturing",
+        "CON-Construction",
+        "ELE-Electricians",
+        "VEH-Vehicle Industry",
+        "WEO-Wholesale Trades"
+      ) ~ "Manufacturing, Construction, and Trades",
+      Industry %in% c(
+        "EDN-Education",
+        "HEA-Health Industry",
+        "MGE-Medical Services Gen"
+      ) ~ "Education and Health",
+      Industry %in% c(
+        "RTL-Retail Trade",
+        "ACR-Accom. Cafes & Rests",
+        "FOO-Food",
+        "Hospitality"
+      ) ~ "Retail, Hospitality, and Food",
+      Industry %in% c("AGR-Farming/Agriculture", "EGW
+-Electric/Gas/Water") ~ "Agriculture and Utilities",
+Industry == "Other" ~ "Other",
+TRUE ~ "Uncategorized"  # Catch any uncategorized industries
+    )
+  )
+
+
+# View the newly grouped data
+print(combined_data)
+```
+
+```{r}
+industry_counts <- combined_data %>%
+  count(Industry_Group) %>%
+  arrange(desc(n))
+
+# View the result
+print(industry_counts)
 ```
