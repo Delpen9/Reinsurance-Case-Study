@@ -1,19 +1,51 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Case Study"
+output: case_study_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+Load in the important libraries.
 
 ```{r}
-plot(cars)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
 ```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+## **Problem 1 – Data handling, analysis and plotting**	
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+The first problem of the case study builds on the data in the files p01-02_portfolio.csv and
+p01-02_rates.csv. One file contains membership information for a Group Life portfolio and one
+has information on the rates which should be charged.
 
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+# Load the CSV file
+portfolio_data <- read_delim(
+  "Case Study/data/p01-02_portfolio.csv",
+  delim = ";",
+  show_col_types = FALSE
+)
 
+# View the data
+print(portfolio_data)
+```
+
+```{r}
+# Load the CSV file
+rates_data <- read_delim(
+  "Case Study/data/p01-02_rates.csv",
+  delim = ";",
+  show_col_types = FALSE
+)
+
+# View the data
+print(rates_data)
+```
+
+### **Question a.**			
+
+Read the data from the two files into R’s memory. The rates are applicable to each individual in the portfolio, depending on that individual’s age and gender. Combine the two datasets into a single table by looking up the rate for each line of the portfolio.
+
+```{r}
+
+```
