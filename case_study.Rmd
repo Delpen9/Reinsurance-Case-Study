@@ -590,3 +590,14 @@ ggplot(all_costs_data, aes(x = Cost)) +
   labs(title = "Histogram of Monte Carlo Simulation Costs by Scheme", x = "Cost", y = "Frequency") +
   theme_minimal()
 ```
+
+## **Problem 2 – Statistical learning**		
+
+The following code loads the data used in Problem 2. The data is stored in two .csv files containing a data
+set and a scoring set, respectively. These data are NOT related to Problem 1.
+
+![](images/clipboard-2248034987.png)
+
+The goal of this problem is to predict the value of the variable outcome in the dataset defined above. The
+measure of goodness of fit is the area under the receiver operating characteristic curve (AUC) and will be
+measured on the scoring set.
