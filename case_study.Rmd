@@ -179,6 +179,33 @@ industry_counts <- combined_data %>%
 print(industry_counts)
 ```
 
+1.  <div>
+
+    ```{r}
+    # Check the type of DeathSI
+    typeof(combined_data$DeathSI)
+
+    # Count the number of NA values in DeathSI when it was character type
+    na_count <- sum(is.na(combined_data$DeathSI))
+    na_count
+
+    # Count the number of "NA" string values in DeathSI when it was character type
+    na_string_count <- sum(combined_data$DeathSI == "NA", na.rm = TRUE)
+    na_string_count
+
+    # Remove apostrophes and convert the DeathSI column from character to numeric
+    combined_data$DeathSI <- as.numeric(gsub("'", "", combined_data$DeathSI))
+
+    # Check the type of DeathSI
+    typeof(combined_data$DeathSI)
+
+    # Count the number of NA values in DeathSI when it is the double type
+    na_count <- sum(is.na(combined_data$DeathSI))
+    na_count
+    ```
+
+    </div>
+
 ```{r}
 # Calculate mean, standard deviation, and quantiles for each industry group
 summary_stats <- combined_data %>%
@@ -194,3 +221,8 @@ summary_stats <- combined_data %>%
 # View the result
 print(summary_stats)
 ```
+
+## **Question c.**			
+
+The following code performs a Monte Carlo simulation on the data you have loaded and combined in Ques-
+tion a.:
