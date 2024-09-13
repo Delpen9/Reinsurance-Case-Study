@@ -1,6 +1,6 @@
 ---
 title: "Case Study"
-output: case_study_notebook
+output: case_study
 ---
 
 Load in the important libraries.
@@ -13,11 +13,9 @@ library(ggplot2)
 library(lubridate)
 ```
 
-## **Problem 1 – Data handling, analysis and plotting**	
+## **Problem 1 – Data handling, analysis and plotting**
 
-The first problem of the case study builds on the data in the files p01-02_portfolio.csv and
-p01-02_rates.csv. One file contains membership information for a Group Life portfolio and one
-has information on the rates which should be charged.
+The first problem of the case study builds on the data in the files p01-02_portfolio.csv and p01-02_rates.csv. One file contains membership information for a Group Life portfolio and one has information on the rates which should be charged.
 
 ```{r}
 # Load the CSV file
@@ -43,7 +41,25 @@ rates_data <- read_delim(
 head(rates_data)
 ```
 
-### **Question a.**			
+rates_data
+
+```{r}
+# Count occurrences of each combination of Gender and Age
+duplicates <- rates_data %>%
+  group_by(Gender, Age) %>%
+  summarise(count = n()) %>%
+  filter(count > 1)
+
+# Check if any duplicates exist
+if (nrow(duplicates) == 0) {
+  message("Sanity Check Passed: 'Gender' and 'Age' form a unique key.")
+} else {
+  message("Sanity Check Failed: There are duplicate combinations of 'Gender' and 'Age'.")
+  print(duplicates)
+}
+```
+
+### **Question a.**
 
 Read the data from the two files into R’s memory. The rates are applicable to each individual in the portfolio, depending on that individual’s age and gender. Combine the two datasets into a single table by looking up the rate for each line of the portfolio.
 
@@ -64,7 +80,6 @@ joined_data <- inner_join(
   portfolio_data,
   rates_data,
   by = c("age" = "Age", "Gender" = "Gender"),
-  relationship = "many-to-many"
 )
 
 # Check if the row count of the joined data matches the original portfolio data
@@ -80,7 +95,26 @@ if (nrow(joined_data) == nrow(portfolio_data)) {
 head(joined_data)
 ```
 
+#### Investigate missing matches
+
+```{r}
+# Find rows in portfolio_data that do not have a match in rates_data
+missing_matches <- anti_join(
+  portfolio_data, rates_data,
+  by = c("age" = "Age", "Gender" = "Gender")
+)
+
+# Check how many rows are missing
+nrow(missing_matches)
+```
+
 ### **Question b.**
 
-Group the Industry field into common-sense based groupings and determine the mean, standard deviation
-and quintiles of DeathSI for each of your industry groups.
+Group the Industry field into common-sense based groupings and determine the mean, standard deviation and quantiles of DeathSI for each of your industry groups.
+
+### Convert to PDF
+
+```{r}
+# Convert notebook to .pdf
+rmarkdown::render("case_study.Rmd", output_format = "pdf_document")
+```
