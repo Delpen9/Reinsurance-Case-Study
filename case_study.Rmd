@@ -63,7 +63,8 @@ if (nrow(duplicates) == 0) {
 
 ```{r}
 # Step 1: Convert the Date.of.Birth column to Date format
-portfolio_data$Date.of.Birth <- dmy(portfolio_data$Date.of.Birth)  # dmy is used for "day-month-year" format
+# dmy is used for "day-month-year" format
+portfolio_data$Date.of.Birth <- dmy(portfolio_data$Date.of.Birth)
 
 # Step 2: Calculate the time difference in years
 portfolio_data$age <- ceiling(interval(portfolio_data$Date.of.Birth, today()) / years(1))
@@ -72,10 +73,128 @@ portfolio_data$age <- ceiling(interval(portfolio_data$Date.of.Birth, today()) / 
 head(portfolio_data)
 ```
 
+### Extrapolate Rates Data beyond 70 years
+
+```{r}
+# Create the line plot with grouping by Gender
+ggplot(rates_data, aes(
+  x = Age,
+  y = Rate,
+  color = Gender,
+  group = Gender
+)) +
+  geom_line(linewidth = 1) +  # Use linewidth instead of size
+  scale_color_manual(values = c("F" = "red", "M" = "blue")) +  # Set colors for genders
+  labs(title = "Rate vs Age by Gender", x = "Age", y = "Rate") +
+  theme_minimal()  # Use a clean theme for the plot
+```
+
+### Fit an Exponential Model for Each Gender
+
+```{r}
+# Fit an exponential model for each gender
+exp_model_female <- nls(Rate ~ exp(a + b * Age), data = subset(rates_data, Gender == "F"), start = list(a = 0, b = 0))
+exp_model_male <- nls(Rate ~ exp(a + b * Age), data = subset(rates_data, Gender == "M"), start = list(a = 0, b = 0))
+
+# Summarize the models
+summary(exp_model_female)
+summary(exp_model_male)
+```
+
+### **Plot the Data and the Fitted Exponential Curves**
+
+```{r}
+# Generate new data for ages 0 to 90 for both genders
+new_data <- data.frame(Age = rep(0:90, 2), Gender = rep(c("F", "M"), each = 91))
+
+# Predict rates for the new data using the fitted models
+new_data$Rate_pred <- ifelse(
+  new_data$Gender == "F",
+  predict(exp_model_female, newdata = subset(new_data, Gender == "F")),
+  predict(exp_model_male, newdata = subset(new_data, Gender == "M"))
+)
+
+# Plot the original data along with the fitted exponential curves
+ggplot() +
+  geom_line(
+    data = new_data,
+    aes(x = Age, y = Rate_pred, color = Gender),
+    linewidth = 1,
+    linetype = "dashed"
+  ) +  # Fitted lines for each gender
+  geom_point(data = rates_data, aes(x = Age, y = Rate, color = Gender)) +  # Original data points
+  scale_color_manual(values = c("F" = "red", "M" = "blue")) +  # Set colors for genders
+  labs(title = "Rate vs Age by Gender with Fitted Exponential Models", x = "Age", y = "Rate") +
+  theme_minimal()
+```
+
+### Add Extrapolated Values to Rates Data
+
+```{r}
+# Get the unique values from the Gender column
+unique_genders <- unique(rates_data$Gender)
+
+# Print the unique values
+unique_genders
+
+# Get the unique values from the Gender column
+unique_genders <- unique(portfolio_data$Gender)
+
+# Print the unique values
+unique_genders
+
+# Convert "Male" to "M" and "Female" to "F" using ifelse
+portfolio_data$Gender <- ifelse(
+  portfolio_data$Gender == "Male",
+  "M",
+  ifelse(portfolio_data$Gender == "Female", "F", portfolio_data$Gender)
+)
+
+# Get the unique values from the Gender column
+unique_genders <- unique(portfolio_data$Gender)
+
+# Print the unique values
+unique_genders
+```
+
+```{r}
+# Step 1: Create a complete sequence of ages from 1 to 110 for both genders
+complete_ages <- expand.grid(Age = 1:126, Gender = c("F", "M"))
+
+# Step 2: Identify missing "Age" and "Gender" combinations in the existing data
+# Perform an anti-join to find missing combinations (from dplyr)
+missing_ages <- anti_join(complete_ages, rates_data, by = c("Age", "Gender"))
+
+# Step 3: Predict the rates for the missing combinations using the fitted models
+missing_ages$Rate <- ifelse(
+  missing_ages$Gender == "F",
+  predict(exp_model_female, newdata = subset(missing_ages, Gender == "F")),
+  predict(exp_model_male, newdata = subset(missing_ages, Gender == "M"))
+)
+
+# Step 4: Append the new data (with missing combinations filled) to the existing data
+rates_data_extended <- rbind(rates_data, missing_ages)
+```
+
+```{r}
+# Create the line plot with grouping by Gender
+ggplot(rates_data_extended,
+       aes(
+         x = Age,
+         y = Rate,
+         color = Gender,
+         group = Gender
+       )) +
+  geom_line(linewidth = 1) +  # Use linewidth instead of size
+  scale_color_manual(values = c("F" = "red", "M" = "blue")) +  # Set colors for genders
+  labs(title = "Rate vs Age by Gender", x = "Age", y = "Rate") +
+  theme_minimal()  # Use a clean theme for the plot
+```
+
 ```{r}
 # Inner join the two datasets
 combined_data <- inner_join(portfolio_data,
-                            rates_data,
+                            rates_data_extended,
                             by = c("age" = "Age", "Gender" = "Gender"),
 )
 
@@ -87,16 +206,18 @@ if (nrow(combined_data) == nrow(portfolio_data)) {
   message("Rows in portfolio_data: ", nrow(portfolio_data))
   message("Rows in combined_data: ", nrow(combined_data))
 }
-```
 
-*This sanity check is expected to fail because the rates data is cutoff at 70. Do not consider people over 70 in this analysis.*
+# Get the unique values in the SchemeName column
+unique_schemes <- unique(combined_data$SchemeName)
+unique_schemes
+```
 
 #### *Investigate missing matches*
 
 ```{r}
 # Find rows in portfolio_data that do not have a match in rates_data
 missing_matches <- anti_join(portfolio_data,
-                             rates_data,
+                             rates_data_extended,
                              by = c("age" = "Age", "Gender" = "Gender"))
 
 # Check how many rows are missing
@@ -282,27 +403,31 @@ unique_schemes <- unique(combined_data$SchemeName)
 # Print the unique values
 unique_schemes
 
-# Filter rows where SchemeName is "Scheme_1", "Scheme_2", "Scheme_3", "Scheme_5"
+# Filter rows where SchemeName is "Scheme_1", "Scheme_2", "Scheme_3", "Scheme_4", "Scheme_5"
 combined_data_scheme_1 <- subset(combined_data_death_si_non_na, SchemeName == "Scheme1")
 combined_data_scheme_2 <- subset(combined_data_death_si_non_na, SchemeName == "Scheme2")
 combined_data_scheme_3 <- subset(combined_data_death_si_non_na, SchemeName == "Scheme3")
+combined_data_scheme_4 <- subset(combined_data_death_si_non_na, SchemeName == "Scheme4")
 combined_data_scheme_5 <- subset(combined_data_death_si_non_na, SchemeName == "Scheme5")
 
 # Sanity check that each subset has more than 0 rows
 check_scheme_1 <- nrow(combined_data_scheme_1) > 0
 check_scheme_2 <- nrow(combined_data_scheme_2) > 0
 check_scheme_3 <- nrow(combined_data_scheme_3) > 0
+check_scheme_4 <- nrow(combined_data_scheme_4) > 0
 check_scheme_5 <- nrow(combined_data_scheme_5) > 0
 
 # Print the results
 cat("Scheme 1 has more than 0 rows:", check_scheme_1, "\n")
 cat("Scheme 2 has more than 0 rows:", check_scheme_2, "\n")
 cat("Scheme 3 has more than 0 rows:", check_scheme_3, "\n")
+cat("Scheme 4 has more than 0 rows:", check_scheme_4, "\n")
 cat("Scheme 5 has more than 0 rows:", check_scheme_5, "\n")
 
 # Perform a monte carlo simulation for each scheme
 monte_carlo_scheme_1_result <- monte_carlo_simulation(combined_data_scheme_1)
 monte_carlo_scheme_2_result <- monte_carlo_simulation(combined_data_scheme_2)
 monte_carlo_scheme_3_result <- monte_carlo_simulation(combined_data_scheme_3)
+monte_carlo_scheme_4_result <- monte_carlo_simulation(combined_data_scheme_4)
 monte_carlo_scheme_5_result <- monte_carlo_simulation(combined_data_scheme_5)
 ```
