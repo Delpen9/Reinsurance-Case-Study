@@ -222,7 +222,87 @@ summary_stats <- combined_data %>%
 print(summary_stats)
 ```
 
-## **Question c.**			
+## **Question c.**
 
-The following code performs a Monte Carlo simulation on the data you have loaded and combined in Ques-
-tion a.:
+The following code performs a Monte Carlo simulation on the data you have loaded and combined in Question a.:
+
+![](images/clipboard-3651184026.png)
+
+Apply this simulation to each scheme in the dataset you were provided, running 1000 simulations per scheme. Produce a plot of the simulated outcomes (“cost”). Your plot should show:
+
+-   a separate histogram per scheme;
+
+-   all 5 histograms below each other so that they can be easily compared;
+
+-   vertical lines in each graph indicating the median, mean and 99.5th percentile of each distribution.
+
+### Remove rows where DeathSI is NA for Monte Carlo simulation.
+
+```{r}
+# Get the number of rows in the original dataset
+original_row_count <- nrow(combined_data)
+
+# Subset combined_data where DeathSI is not NA
+combined_data_death_si_non_na <- subset(combined_data, !is.na(DeathSI))
+
+# Get the number of rows in the filtered dataset
+filtered_row_count <- nrow(combined_data_death_si_non_na)
+
+# Print out the row counts to validate reduction
+cat("Original row count:", original_row_count, "\n")
+cat("Filtered row count (DeathSI not NA):", filtered_row_count, "\n")
+
+# Check if the row count was reduced
+if (filtered_row_count < original_row_count) {
+  cat("Row reduction validated: Rows were reduced after filtering.\n")
+} else {
+  cat("No row reduction: No NA values in DeathSI.\n")
+}
+```
+
+```{r}
+monte_carlo_simulation <- function(data, nsim = 1000, seed = 1234) {
+  # Set the seed for reproducibility
+  set.seed(seed)
+  
+  # Perform the simulation
+  res <- lapply(1:nsim, function(i, ...) {
+    x <- ifelse(runif(dim(data)[1]) < data$Rate / 1000, data$DeathSI, 0)
+    # Return the cost and count as a list
+    list(cost = sum(x), count = length(x[x > 0]))
+  })
+  
+  # Return the result of the simulation
+  return(res)
+}
+
+# Get the unique values in the SchemeName column
+unique_schemes <- unique(combined_data$SchemeName)
+
+# Print the unique values
+unique_schemes
+
+# Filter rows where SchemeName is "Scheme_1", "Scheme_2", "Scheme_3", "Scheme_5"
+combined_data_scheme_1 <- subset(combined_data_death_si_non_na, SchemeName == "Scheme1")
+combined_data_scheme_2 <- subset(combined_data_death_si_non_na, SchemeName == "Scheme2")
+combined_data_scheme_3 <- subset(combined_data_death_si_non_na, SchemeName == "Scheme3")
+combined_data_scheme_5 <- subset(combined_data_death_si_non_na, SchemeName == "Scheme5")
+
+# Sanity check that each subset has more than 0 rows
+check_scheme_1 <- nrow(combined_data_scheme_1) > 0
+check_scheme_2 <- nrow(combined_data_scheme_2) > 0
+check_scheme_3 <- nrow(combined_data_scheme_3) > 0
+check_scheme_5 <- nrow(combined_data_scheme_5) > 0
+
+# Print the results
+cat("Scheme 1 has more than 0 rows:", check_scheme_1, "\n")
+cat("Scheme 2 has more than 0 rows:", check_scheme_2, "\n")
+cat("Scheme 3 has more than 0 rows:", check_scheme_3, "\n")
+cat("Scheme 5 has more than 0 rows:", check_scheme_5, "\n")
+
+# Perform a monte carlo simulation for each scheme
+monte_carlo_scheme_1_result <- monte_carlo_simulation(combined_data_scheme_1)
+monte_carlo_scheme_2_result <- monte_carlo_simulation(combined_data_scheme_2)
+monte_carlo_scheme_3_result <- monte_carlo_simulation(combined_data_scheme_3)
+monte_carlo_scheme_5_result <- monte_carlo_simulation(combined_data_scheme_5)
+```
