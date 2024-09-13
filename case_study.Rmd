@@ -431,3 +431,162 @@ monte_carlo_scheme_3_result <- monte_carlo_simulation(combined_data_scheme_3)
 monte_carlo_scheme_4_result <- monte_carlo_simulation(combined_data_scheme_4)
 monte_carlo_scheme_5_result <- monte_carlo_simulation(combined_data_scheme_5)
 ```
+
+```{r}
+# Assuming you have 5 Monte Carlo simulation results, stored in a list
+monte_carlo_results <- list(
+  scheme_1 = monte_carlo_scheme_1_result,
+  scheme_2 = monte_carlo_scheme_2_result,
+  scheme_3 = monte_carlo_scheme_3_result,
+  scheme_4 = monte_carlo_scheme_4_result,
+  scheme_5 = monte_carlo_scheme_5_result
+)
+
+# Create an empty data frame to hold all the costs and corresponding scheme names
+all_costs_data <- data.frame()
+
+# Loop over each result and calculate costs, then combine into one data frame
+for (scheme_name in names(monte_carlo_results)) {
+  costs <- sapply(monte_carlo_results[[scheme_name]], function(x)
+    x$cost)
+  temp_data <- data.frame(Cost = costs, Scheme = scheme_name)
+  all_costs_data <- rbind(all_costs_data, temp_data)
+}
+
+all_stats <- all_costs_data %>%
+  group_by(Scheme) %>%
+  summarise(
+    mean_cost = mean(Cost),
+    median_cost = median(Cost),
+    percentile_99_5_cost = quantile(Cost, 0.995)
+  )
+
+# Create different x and y positions for each label depending on the scheme
+all_stats <- all_stats %>%
+  mutate(
+    # Dynamic x positions for each scheme
+    x_position_mean = ifelse(
+      Scheme == "scheme_1",
+      3e+07,
+      ifelse(
+        Scheme == "scheme_2",
+        3e+07,
+        ifelse(
+          Scheme == "scheme_3",
+          3e+07,
+          ifelse(Scheme == "scheme_4", 3e+07, 3e+07)
+        )
+      )
+    ),
+    x_position_median = x_position_mean + 0.5e+06,
+    # Offset for median
+    x_position_995 = x_position_mean - 0.5e+06,
+    # Offset for 99.5th percentile
+    
+    # Dynamic y positions for each scheme
+    y_position_mean = ifelse(
+      Scheme == "scheme_1",
+      100,
+      ifelse(
+        Scheme == "scheme_2",
+        400,
+        ifelse(Scheme == "scheme_3", 325, ifelse(Scheme == "scheme_4", 325, 325))
+      )
+    ),
+    y_position_median = ifelse(
+      Scheme == "scheme_1",
+      150,
+      ifelse(
+        Scheme == "scheme_2",
+        500,
+        ifelse(Scheme == "scheme_3", 425, ifelse(Scheme == "scheme_4", 425, 425))
+      )
+    ),
+    y_position_995 = ifelse(
+      Scheme == "scheme_1",
+      200,
+      ifelse(
+        Scheme == "scheme_2",
+        600,
+        ifelse(Scheme == "scheme_3", 525, ifelse(Scheme == "scheme_4", 525, 525))
+      )
+    ),
+  )
+
+# Create the faceted plot with adjusted x and y positions for each level in the stack
+ggplot(all_costs_data, aes(x = Cost)) +
+  geom_histogram(bins = 30,
+                 fill = "blue",
+                 alpha = 0.7) +  # Set the number of bins
+  # Add vertical lines for mean, median, and 99.5th percentile
+  geom_vline(
+    data = all_stats,
+    aes(xintercept = mean_cost),
+    color = "red",
+    linetype = "dashed",
+    size = 1
+  ) +
+  geom_vline(
+    data = all_stats,
+    aes(xintercept = median_cost),
+    color = "green",
+    linetype = "dashed",
+    size = 1
+  ) +
+  geom_vline(
+    data = all_stats,
+    aes(xintercept = percentile_99_5_cost),
+    color = "purple",
+    linetype = "dashed",
+    size = 1
+  ) +
+  
+  # Add labels with dynamically adjusted x and y positions for each scheme
+  geom_label(
+    data = all_stats,
+    aes(
+      x = x_position_mean,
+      y = y_position_mean,
+      label = paste("Mean:", round(mean_cost, 2))
+    ),
+    color = "white",
+    fill = "red",
+    size = 2,
+    angle = 0,
+    vjust = 2,
+    hjust = 0.5
+  ) +
+  geom_label(
+    data = all_stats,
+    aes(
+      x = x_position_median,
+      y = y_position_median,
+      label = paste("Median:", round(median_cost, 2))
+    ),
+    color = "white",
+    fill = "green",
+    size = 2,
+    angle = 0,
+    vjust = 2,
+    hjust = 0.5
+  ) +
+  geom_label(
+    data = all_stats,
+    aes(
+      x = x_position_995,
+      y = y_position_995,
+      label = paste("99.5%:", round(percentile_99_5_cost, 2))
+    ),
+    color = "white",
+    fill = "purple",
+    size = 2,
+    angle = 0,
+    vjust = 2,
+    hjust = 0.5
+  ) +
+  
+  # Facet the plot vertically for each scheme
+  facet_grid(Scheme ~ ., scales = "free_y") +
+  labs(title = "Histogram of Monte Carlo Simulation Costs by Scheme", x = "Cost", y = "Frequency") +
+  theme_minimal()
+```
