@@ -10,6 +10,7 @@ library(tidyverse)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(lubridate)
 ```
 
 ## **Problem 1 – Data handling, analysis and plotting**	
@@ -27,7 +28,7 @@ portfolio_data <- read_delim(
 )
 
 # View the data
-print(portfolio_data)
+head(portfolio_data)
 ```
 
 ```{r}
@@ -39,7 +40,7 @@ rates_data <- read_delim(
 )
 
 # View the data
-print(rates_data)
+head(rates_data)
 ```
 
 ### **Question a.**			
@@ -47,5 +48,39 @@ print(rates_data)
 Read the data from the two files into R’s memory. The rates are applicable to each individual in the portfolio, depending on that individual’s age and gender. Combine the two datasets into a single table by looking up the rate for each line of the portfolio.
 
 ```{r}
+# Step 1: Convert the Date.of.Birth column to Date format
+portfolio_data$Date.of.Birth <- dmy(portfolio_data$Date.of.Birth)  # dmy is used for "day-month-year" format
 
+# Step 2: Calculate the time difference in years
+portfolio_data$age <- ceiling(interval(portfolio_data$Date.of.Birth, today()) / years(1))
+
+# Step 3: View the updated data with age column
+head(portfolio_data)
 ```
+
+```{r}
+# Inner join the two datasets
+joined_data <- inner_join(
+  portfolio_data,
+  rates_data,
+  by = c("age" = "Age", "Gender" = "Gender"),
+  relationship = "many-to-many"
+)
+
+# Check if the row count of the joined data matches the original portfolio data
+if (nrow(joined_data) == nrow(portfolio_data)) {
+  message("Sanity Check Passed: The row count of joined_data matches portfolio_data.")
+} else {
+  message("Sanity Check Failed: The row count of joined_data does not match portfolio_data.")
+  message("Rows in portfolio_data: ", nrow(portfolio_data))
+  message("Rows in joined_data: ", nrow(joined_data))
+}
+
+# View the result
+head(joined_data)
+```
+
+### **Question b.**
+
+Group the Industry field into common-sense based groupings and determine the mean, standard deviation
+and quintiles of DeathSI for each of your industry groups.
