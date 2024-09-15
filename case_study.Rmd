@@ -6,6 +6,8 @@ output: pdf_document
 *Load in the important libraries.*
 
 ```{r}
+library(pROC)
+library(caret)
 library(mice)
 library(Rtsne)
 library(umap)
@@ -735,7 +737,11 @@ display_na_counts(scoring, "scoring")
 method_dta <- make.method(dta)
 method_dta["outcome"] <- ""
 
-# Perform imputation on both datasets: KNN Imputation
+# Perform imputation on both datasets
+#	•	Predictive Mean Matching (pmm):
+#	•	Imputes missing values by finding observed values in the dataset that are similar (in terms of predictive means) to the missing value and then drawing from these similar observed values.
+#	•	This method is often used for numeric data and is robust since it preserves the original distribution of the data.
+
 dta_imputed <- mice(dta, method = method_dta, m = 5)
 scoring_imputed <- mice(scoring, method = 'pmm', m = 5)
 
@@ -876,37 +882,327 @@ ggplot(umap_data_with_group, aes(x = UMAP1, y = UMAP2, color = group)) +
   theme(legend.title = element_blank())  # Remove legend title
 ```
 
-\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 **Question a.**
 
 Describe the statistical learning problem. Explain the difficulties in training a model with the above dataset.
-\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
-This learning problem falls under **semi-supervised learning**, which combines labeled data (10,000 rows with targets from the "dta" set) with a smaller amount of unlabeled data (2,000 rows without targets from the "scoring" set). The goal is to leverage both to improve the model’s performance, typically by learning the structure of the data from the unlabeled dataset and refining predictions on the labeled dataset.
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+This learning problem was initially considered to fall under **semi-supervised learning**, which combines labeled data (10,000 rows with targets from the “dta” set) with a smaller amount of unlabeled data (2,000 rows without targets from the “scoring” set). The goal is typically to leverage both datasets to improve model performance, learning the structure of the data from the unlabeled dataset and refining predictions on the labeled dataset.
+
+However, **clustering on the “scoring” dataset has shown poor performance**, indicating that the unlabeled data may not contribute meaningful structure for semi-supervised methods. As a result, we are likely to opt for a more traditional **supervised learning approach** using only the labeled “dta” dataset. While **semi-supervised learning** remains possible, it may not provide the expected improvements in this case.
 
 **Key Challenges:**
 
-1.  **Handling Missing Values (NaNs in “R”)**: Missing data in the independent variable “R” will make it harder to apply some models directly. Techniques like imputation (e.g., mean, median, or model-based imputation) or excluding rows with missing values might be necessary. However, these methods can introduce bias or lead to information loss.
+1.  **Handling Missing Values (NaNs in “R”):** Missing data in the independent variable “R” complicates model training. Imputation methods such as mean, median, or model-based imputation can be employed, but they carry risks of bias or information loss, which could affect model performance.
 
-2.  **Bias Between Datasets**: The distribution of the features in your labeled and unlabeled datasets might differ. If the 2,000 rows (without a target) are from a different distribution than the 10,000 rows (with targets), the model may struggle to generalize well.
+2.  **Bias Between Datasets**: The distribution of features in the “scoring” dataset may differ significantly from the labeled “dta” dataset. If the 2,000 rows without a target differ in distribution from the 10,000 labeled rows, the model may struggle to generalize well, further limiting the effectiveness of semi-supervised learning.
 
-```{=html}
-<!-- -->
+3.  **Model Complexity**: Semi-supervised learning techniques like self-training, co-training, or graph-based methods can efficiently utilize the unlabeled data, but they often involve complex, computationally expensive processes. Given the poor clustering results, these methods may not offer a substantial benefit over simpler, fully supervised models.
+
+4.  **Feature Engineering for Unlabeled Data**: Extracting meaningful patterns from the 2,000-row unlabeled dataset has proven challenging. Methods such as clustering and dimensionality reduction (e.g., PCA) haven’t provided clear groupings, which diminishes the potential for effective semi-supervised learning.
+
+5.  **Class Imbalance**: If class imbalance exists in the target variable within the labeled dataset, the model may be prone to overfitting to the majority class. This risk increases in the absence of class information from the unlabeled data, which could otherwise help balance the minority class representation.
+
+6.  **Semi-supervised Algorithms**: Although semi-supervised algorithms like Label Propagation, Self-learning, and Generative Models are designed to handle such cases, they may not offer significant advantages when the structure of the unlabeled data (from the “scoring” set) is not informative. In contrast, conventional supervised algorithms, such as decision trees or gradient-boosting models, may perform better in this scenario.
+
+**Conclusion:**
+
+Given the current challenges and the poor performance of clustering on the “scoring” dataset, **a supervised learning approach** using only the labeled “dta” dataset is likely to yield better results. Semi-supervised learning remains an option, but without clear structure in the unlabeled data, it is less promising in this particular case. Specific strategies for data preparation, model selection, and evaluation will be key to building a robust model that handles the missing values, potential biases, and any class imbalances effectively.
+
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+**Question b.**			
+
+The variable group has different factor levels in the data and scoring set. How will this difference impact
+your predictive model? What solutions might you offer?
+
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+The presence of different groups in the training and scoring sets can affect a model’s ability to generalize effectively. When unseen categories (e.g., "c" in scoring) appear in future data, the model may struggle to predict accurately since it hasn't learned from these groups. This can lead to unreliable predictions, especially if the model relies heavily on categorical features. Overfitting to seen categories (e.g., "d") could further reduce generalization, as the model may become too specialized in patterns specific to the training set. Techniques like one-hot encoding or ordinal encoding can create challenges when categories differ between datasets, as missing or misrepresented categories can skew predictions.
+
+Imputation strategies or the introduction of `NaN` values, followed by one-hot encoding, can help mitigate these issues by allowing the model to treat missing or unseen categories as distinct features. This improves the model's flexibility and ability to handle future data with different group distributions. However, too much imputation or consolidation of categories can reduce the specificity of learned patterns, creating a trade-off between accuracy for seen categories and generalization across unseen ones. Balancing these techniques is crucial for maintaining robust model performance across both current and future datasets.
+
+Possible approaches:
+
+1.  One option is to remove the “c” and “d” groups from the dataset entirely. However, this approach is suboptimal, as it would reduce the size of both the training and scoring sets, potentially limiting model performance.
+
+2.  Alternatively, we could apply **ordinal encoding** to the “group” field, mapping each category to a numeric value such as: {“a”: 0, “b”: 1, “c”: 2, “d”: 3, “e”: 4, “f”: 5}. This would preserve the ordinal nature of the categories, if applicable.
+
+3.  A third option involves **one-hot encoding**, where each group is represented as a binary feature. This approach allows the model to treat the categories as distinct, without imposing any ordinal structure.
+
+4.  Another strategy is **category imputation**, where we impute the missing “c” category in the training set and “d” in the scoring set, thereby ensuring consistency across datasets.
+
+5.  We could **combine the “c” and “d” categories** into a single group, as they were statistically indistinguishable based on the results of a Kolmogorov-Smirnov (KS) test. This would reduce the complexity of the categorical variable without losing important distinctions.
+
+6.  Another potential approach is to set the “d” values in the original training dataset to NaN and strategically introduce additional NaN values in the “group” field. This selective nullification can help the model generalize better by simulating missing or less certain data. After introducing these NaN values, we can then apply **one-hot encoding** to the “group” field. This allows the model to treat the missing categories as a separate feature, potentially improving its ability to handle unseen categories during scoring or in future data.
+
+Selected approach: 6.
+
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+**Question c.**				
+
+Train a model to predict outcome. You are free to use any package in R. Explain the logical progression
+that leads you to your final solution. Be prepared to interrogate relationships within the model (i.e., how each
+variable impacts the model and their relationship to the outcome)
+
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+### Pre-process the Training Set
+
+```{r}
+dta_complete$group[dta_complete$group == "d"] <- NA
+
+# First, identify the non-NA rows
+non_na_rows <- which(!is.na(dta_complete$group))
+
+# Determine 20% of the non-NA rows
+set.seed(123)  # Set a seed for reproducibility (optional)
+num_to_replace <- round(0.2 * length(non_na_rows))
+
+# Randomly select 20% of the non-NA rows
+rows_to_replace <- sample(non_na_rows, num_to_replace)
+
+# Replace the selected rows with NA
+dta_complete$group[rows_to_replace] <- NA
+
+# Replace NA values in the "group" column with the string "impute"
+dta_complete$group[is.na(dta_complete$group)] <- "impute"
 ```
-3.  **Model Complexity**: Semi-supervised models often require complex techniques such as self-training, co-training, or graph-based methods to use the unlabeled data efficiently. These techniques can be computationally expensive and tricky to fine-tune.
 
-4.  **Feature Engineering for Unlabeled Data**: Without a target in the 2,000-row dataset, extracting meaningful patterns is challenging. You may need to create features based on clustering, dimensionality reduction (e.g., PCA), or distance-based approaches to make the most of the unlabeled data.
+```{r}
+# Ensure the "group" column is a factor with the specified levels
+dta_complete$group <- factor(dta_complete$group, levels = c("a", "b", "e", "f", "g", "impute"))
 
-5.  **Class Imbalance**: If there’s an imbalance in the target variable in your labeled dataset, the model might overfit to the more common class, especially with so much unlabeled data that has no class information to aid the minority class.
+# One-hot encode the "group" column
+one_hot_encoded <- model.matrix( ~ group - 1, data = dta_complete)
 
-6.  **Semi-supervised Algorithms**: The choice of a semi-supervised algorithm, such as Label Propagation, Self-learning, or Generative Models, impacts how well you can use both datasets. Many conventional algorithms like decision trees or linear models won’t naturally extend to semi-supervised scenarios.
+# Convert the result to a data frame (optional)
+one_hot_encoded_df <- as.data.frame(one_hot_encoded)
 
-Each of these issues will need specific strategies for data preparation, model selection, and evaluation to get robust results.
+# Optionally, you can bind this back to the original dataset
+dta_complete_one_hot <- cbind(dta_complete, one_hot_encoded_df)
 
-\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+# Drop the original "group" column from dta_complete_one_hot
+dta_complete_one_hot <- dta_complete_one_hot[, !names(dta_complete_one_hot) %in% "group"]
+```
 
-**Question b.**
+### Pre-process the Scoring Set
 
-Describe the statistical learning problem. Explain the difficulties in training a model with the above dataset.
-\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+```{r}
+scoring_complete$group[scoring_complete$group == "c"] <- NA
+
+# Replace NA values in the "group" column with the string "impute"
+scoring_complete$group[is.na(scoring_complete$group)] <- "impute"
+```
+
+```{r}
+# Ensure the "group" column is a factor with the specified levels
+scoring_complete$group <- factor(scoring_complete$group,
+                                 levels = c("a", "b", "e", "f", "g", "impute"))
+
+# One-hot encode the "group" column
+one_hot_encoded <- model.matrix(~ group - 1, data = scoring_complete)
+
+# Convert the result to a data frame (optional)
+one_hot_encoded_df <- as.data.frame(one_hot_encoded)
+
+# Optionally, you can bind this back to the original dataset
+scoring_complete_one_hot <- cbind(scoring_complete, one_hot_encoded_df)
+
+# Drop the original "group" column from scoring_complete_one_hot
+scoring_complete_one_hot <- scoring_complete_one_hot[, !names(scoring_complete_one_hot) %in% "group"]
+```
+
+### Get a Holdout Set from the Training Set
+
+```{r}
+# Convert the 'outcome' column to a binary factor with levels 0 and 1
+dta_complete_one_hot$outcome <- factor(dta_complete_one_hot$outcome, levels = c(0, 1))
+
+# Verify the conversion
+str(dta_complete_one_hot$outcome)
+
+# Set a seed for reproducibility (optional)
+set.seed(123)
+
+# Step 1: Define the number of rows in the dataset
+n <- nrow(dta_complete_one_hot)
+
+# Step 2: Randomly sample 10% of the rows for the holdout set
+holdout_indices <- sample(1:n, size = round(0.1 * n))
+
+# Step 3: Create the holdout set (10% of the data)
+holdout_set <- dta_complete_one_hot[holdout_indices, ]
+
+# Step 4: Create the training set (remaining 90% of the data)
+training_set <- dta_complete_one_hot[-holdout_indices, ]
+
+# Step 5: Inspect the sizes of the training and holdout sets
+cat("Training set size:", nrow(training_set), "\n")
+cat("Holdout set size:", nrow(holdout_set), "\n")
+```
+
+```{r}
+# Step 1: Set up k-fold cross-validation (e.g., 5 folds)
+train_control <- trainControl(method = "cv", number = 5)  # 5-fold cross-validation
+
+# Step 2: Fit a logistic regression model using cross-validation
+logistic_model_cv <- train(outcome ~ ., 
+                           data = training_set, 
+                           method = "glm", 
+                           family = binomial, 
+                           trControl = train_control)
+
+# Step 3: View the results of the cross-validation
+print(logistic_model_cv)
+
+# Step 4: Make predictions on the training set (optional)
+predicted_probabilities_cv <- predict(logistic_model_cv, type = "prob")[, 2]
+
+# Step 5: For predicted classes (0 or 1)
+predicted_classes_cv <- ifelse(predicted_probabilities_cv > 0.5, 1, 0)
+
+# Step 6: Evaluate model performance (optional)
+confusion_matrix_cv <- confusionMatrix(as.factor(predicted_classes_cv), training_set$outcome)
+
+# Print the confusion matrix
+print(confusion_matrix_cv)
+```
+
+```{r}
+# Extract the confusion matrix table from the caret result
+conf_matrix <- as.table(confusion_matrix_cv$table)
+
+# Convert it into a data frame for ggplot
+conf_matrix_df <- as.data.frame(conf_matrix)
+
+# Rename columns for readability
+colnames(conf_matrix_df) <- c("Prediction", "Reference", "Frequency")
+
+# Create the confusion matrix heatmap
+ggplot(conf_matrix_df,
+       aes(x = Reference, y = Prediction, fill = Frequency)) +
+  geom_tile(color = "white") +  # Use tiles with white borders
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +  # Color gradient
+  geom_text(aes(label = Frequency),
+            color = "white",
+            size = 6) +  # Add counts on tiles
+  theme_minimal() +  # Use a minimal theme for clean visuals
+  labs(title = "Confusion Matrix", x = "Actual Class", y = "Predicted Class") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    # Centered and bold title
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12)  # Larger axis labels for readability
+  )
+```
+
+### Get the Cross-Validated ROC and AUC (Training Set)
+
+```{r}
+# Calculate ROC curve
+roc_curve <- roc(training_set$outcome, predicted_probabilities_cv)
+
+# Print the AUC value
+auc_value <- auc(roc_curve)
+print(auc_value)
+
+# Create a data frame from the ROC curve for plotting
+roc_df <- data.frame(
+  FalsePositiveRate = 1 - roc_curve$specificities,
+  TruePositiveRate = roc_curve$sensitivities
+)
+
+# Plot the ROC curve using ggplot2
+ggplot(roc_df, aes(x = FalsePositiveRate, y = TruePositiveRate)) +
+  geom_line(color = "blue", size = 1.5) +  # ROC line
+  geom_abline(linetype = "dashed", color = "gray") +  # Diagonal line for random classifier
+  labs(
+    title = paste("(Cross-Validated Training Set) ROC Curve (AUC =", round(auc_value, 2), ")"),
+    x = "False Positive Rate (1 - Specificity)",
+    y = "True Positive Rate (Sensitivity)"
+  ) +
+  theme_minimal() +  # Clean and minimal theme
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    # Centered and bold title
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12)  # Larger axis labels for readability
+  ) +
+  annotate(
+    "text",
+    x = 0.6,
+    y = 0.2,
+    label = paste("AUC =", round(auc_value, 2)),
+    size = 5,
+    color = "red"
+  )  # AUC annotation
+```
+
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+**Question d.**		
+
+Give an estimate of the AUC you expect on the scoring set. Discuss the choice of AUC as the performance
+measure (e.g. instead of accuracy).
+
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+### Get AUC and ROC on the Holdout Set
+
+```{r}
+# Step 1: Make predictions on the holdout set
+# Predict the probabilities for the holdout set using the default response for glm (which gives probabilities)
+predicted_probabilities_holdout <- predict(logistic_model_cv$finalModel,
+                                           newdata = holdout_set,
+                                           type = "response")
+
+# Step 2: Calculate ROC curve and AUC for the holdout set
+roc_curve_holdout <- roc(holdout_set$outcome, predicted_probabilities_holdout)
+
+# Print the AUC value for the holdout set
+auc_value_holdout <- auc(roc_curve_holdout)
+print(paste("AUC for holdout set:", auc_value_holdout))
+
+# Step 3: Create a data frame from the ROC curve for plotting
+roc_df_holdout <- data.frame(
+  FalsePositiveRate = 1 - roc_curve_holdout$specificities,
+  TruePositiveRate = roc_curve_holdout$sensitivities
+)
+
+# Step 4: Plot the ROC curve for the holdout set using ggplot2
+ggplot(roc_df_holdout, aes(x = FalsePositiveRate, y = TruePositiveRate)) +
+  geom_line(color = "blue", size = 1.5) +  # ROC line
+  geom_abline(linetype = "dashed", color = "gray") +  # Diagonal line for random classifier
+  labs(
+    title = paste(
+      "ROC Curve (AUC =",
+      round(auc_value_holdout, 2),
+      ") for Holdout Set"
+    ),
+    x = "False Positive Rate (1 - Specificity)",
+    y = "True Positive Rate (Sensitivity)"
+  ) +
+  theme_minimal() +  # Clean and minimal theme
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    # Centered and bold title
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12)  # Larger axis labels for readability
+  ) +
+  annotate(
+    "text",
+    x = 0.6,
+    y = 0.2,
+    label = paste("AUC =", round(auc_value_holdout, 2)),
+    size = 5,
+    color = "red"
+  )  # AUC annotation
+```
