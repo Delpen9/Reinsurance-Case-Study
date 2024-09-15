@@ -6,6 +6,7 @@ output: pdf_document
 *Load in the important libraries.*
 
 ```{r}
+library(xgboost)
 library(pROC)
 library(caret)
 library(mice)
