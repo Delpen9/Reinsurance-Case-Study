@@ -6,6 +6,8 @@ output: pdf_document
 *Load in the important libraries.*
 
 ```{r}
+library(here)
+library(purrr)
 library(tidyverse)
 library(dplyr)
 library(tidyr)
@@ -601,3 +603,183 @@ set and a scoring set, respectively. These data are NOT related to Problem 1.
 The goal of this problem is to predict the value of the variable outcome in the dataset defined above. The
 measure of goodness of fit is the area under the receiver operating characteristic curve (AUC) and will be
 measured on the scoring set.
+
+```{r}
+dta <- read_csv(
+  here("Case Study/data/p02re_data.csv"),
+  col_types = cols()
+)
+
+scoring <- read_csv(
+  here("Case Study/data/p02re_scoring.csv"),
+  col_types = cols()
+)
+
+head(dta)
+head(scoring)
+```
+
+```{r}
+unique_values <- sort(unique(dta$group))
+print(unique_values)
+
+unique_values <- sort(unique(scoring$group))
+print(unique_values)
+```
+
+```{r}
+# For the first dataset (dta)
+dta_percent <- dta %>%
+  group_by(group) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100, dataset = "dta")
+
+# For the second dataset (scoring)
+scoring_percent <- scoring %>%
+  group_by(group) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100, dataset = "scoring")
+
+# Combine both datasets
+combined_data <- bind_rows(dta_percent, scoring_percent)
+
+ggplot(combined_data, aes(x = group, y = percentage, fill = dataset)) +
+  geom_bar(stat = "identity", position = "dodge") +  # side-by-side bars
+  labs(title = "Distribution of Group in dta and scoring datasets", x = "Group", y = "Percentage") +
+  theme_minimal()
+```
+
+#### **Observation:** The "scoring" set contains a different Group, C, from the "dta" set containing the group, D. It may be worth checking to see if the Groups from both datasets derive from the same distribution or if the naming is erroneous. 
+
+Perform the Kolmogorov-Smirnov test across distributions:
+
+```{r}
+# Define the groups you want to check
+groups <- c("a", "b", "e", "f", "g")
+
+# Function to perform the KS test for a single group
+perform_ks_test <- function(grp) {
+  filtered_dta <- dta %>% filter(group == grp)
+  filtered_scoring <- scoring %>% filter(group == grp)
+  
+  # Apply KS test only for numeric columns
+  ks_results <- map_dbl(names(filtered_dta), function(col) {
+    if (is.numeric(filtered_dta[[col]]) &&
+        is.numeric(filtered_scoring[[col]])) {
+      ks.test(filtered_dta[[col]], filtered_scoring[[col]])$p.value
+    } else {
+      NA_real_  # Return NA for non-numeric columns
+    }
+  })
+  
+  # Display results
+  cat("\nGroup:", grp, "\n")
+  print(ks_results)
+  
+  # Check if any p-values are below 0.05
+  if (any(ks_results < 0.05, na.rm = TRUE)) {
+    cat("\nGroup",
+        grp,
+        "shows a significant difference in distribution.\n")
+  } else {
+    cat(
+      "\nNot enough information to suggest that Group",
+      grp,
+      "comes from a different distribution.\n"
+    )
+  }
+}
+
+# Use purrr::walk to apply the function for each group
+walk(groups, perform_ks_test)
+```
+
+```{r}
+filtered_dta <- dta %>% filter(group == "d")
+filtered_scoring <- scoring %>% filter(group == "c")
+
+# Apply KS test only for numeric columns
+ks_results <- sapply(names(filtered_dta), function(col) {
+  if (is.numeric(filtered_dta[[col]]) &&
+      is.numeric(filtered_scoring[[col]])) {
+    ks.test(filtered_dta[[col]], filtered_scoring[[col]])$p.value
+  } else {
+    NA  # If column is not numeric, return NA
+  }
+})
+
+# View results
+ks_results
+```
+
+Check Missing Values and Discuss Imputation Technique
+
+```{r}
+# Get the count of NaN (NA) values for each column
+na_counts <- sapply(dta, function(x) sum(is.na(x)))
+
+# Display the NA counts for each column
+cat("Missing values in 'dta':\n")
+print(na_counts)
+cat("\n")
+
+# Get the count of NaN (NA) values for each column
+na_counts <- sapply(scoring, function(x) sum(is.na(x)))
+
+# Display the NA counts for each column
+cat("Missing values in 'scoring':\n")
+print(na_counts)
+```
+
+Perform PCA to Visualize Groups
+
+```{r}
+# Create a renamed copy of the data without the "outcomes" field
+dta_renamed <- dta %>% select(-outcome)
+
+# Combine dta_renamed and scoring vertically (row-wise)
+combined_part_2_data <- bind_rows(dta_renamed, scoring)
+
+# Select only the numeric columns for PCA
+numeric_data <- combined_part_2_data %>% select(where(is.numeric))
+
+# Perform PCA and reduce to 2 principal components
+pca_result <- prcomp(numeric_data, center = TRUE, scale. = TRUE)
+
+# Extract the first 2 principal components
+pca_data <- as.data.frame(pca_result$x[, 1:2])
+
+# Rename the principal components for clarity
+colnames(pca_data) <- c("PC1", "PC2")
+
+# View the resulting dataset with 2 principal components
+head(pca_data)
+```
+
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+**Question a.**
+
+Describe the statistical learning problem. Explain the difficulties in training a model with the above dataset.
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+This learning problem falls under **semi-supervised learning**, which combines labeled data (10,000 rows with targets from the "dta" set) with a smaller amount of unlabeled data (2,000 rows without targets from the "scoring" set). The goal is to leverage both to improve the model’s performance, typically by learning the structure of the data from the unlabeled dataset and refining predictions on the labeled dataset.
+
+**Key Challenges:**
+
+1.  **Handling Missing Values (NaNs in “R”)**: Missing data in the independent variable “R” will make it harder to apply some models directly. Techniques like imputation (e.g., mean, median, or model-based imputation) or excluding rows with missing values might be necessary. However, these methods can introduce bias or lead to information loss.
+
+2.  **Bias Between Datasets**: The distribution of the features in your labeled and unlabeled datasets might differ. If the 2,000 rows (without a target) are from a different distribution than the 10,000 rows (with targets), the model may struggle to generalize well.
+
+```{=html}
+<!-- -->
+```
+3.  **Model Complexity**: Semi-supervised models often require complex techniques such as self-training, co-training, or graph-based methods to use the unlabeled data efficiently. These techniques can be computationally expensive and tricky to fine-tune.
+
+4.  **Feature Engineering for Unlabeled Data**: Without a target in the 2,000-row dataset, extracting meaningful patterns is challenging. You may need to create features based on clustering, dimensionality reduction (e.g., PCA), or distance-based approaches to make the most of the unlabeled data.
+
+5.  **Class Imbalance**: If there’s an imbalance in the target variable in your labeled dataset, the model might overfit to the more common class, especially with so much unlabeled data that has no class information to aid the minority class.
+
+6.  **Semi-supervised Algorithms**: The choice of a semi-supervised algorithm, such as Label Propagation, Self-learning, or Generative Models, impacts how well you can use both datasets. Many conventional algorithms like decision trees or linear models won’t naturally extend to semi-supervised scenarios.
+
+Each of these issues will need specific strategies for data preparation, model selection, and evaluation to get robust results.
