@@ -6,6 +6,9 @@ output: pdf_document
 *Load in the important libraries.*
 
 ```{r}
+library(mice)
+library(Rtsne)
+library(umap)
 library(here)
 library(purrr)
 library(tidyverse)
@@ -651,7 +654,7 @@ ggplot(combined_data, aes(x = group, y = percentage, fill = dataset)) +
 
 #### **Observation:** The "scoring" set contains a different Group, C, from the "dta" set containing the group, D. It may be worth checking to see if the Groups from both datasets derive from the same distribution or if the naming is erroneous. 
 
-Perform the Kolmogorov-Smirnov test across distributions:
+Perform the KS-test across distributions:
 
 ```{r}
 # Define the groups you want to check
@@ -712,35 +715,58 @@ ks_results <- sapply(names(filtered_dta), function(col) {
 ks_results
 ```
 
-Check Missing Values and Discuss Imputation Technique
+Check Missing Values and Perform Imputation Technique
 
 ```{r}
-# Get the count of NaN (NA) values for each column
-na_counts <- sapply(dta, function(x) sum(is.na(x)))
+# Function to get and display missing value counts for a dataset
+display_na_counts <- function(dataset, name) {
+  na_counts <- sapply(dataset, function(x)
+    sum(is.na(x)))
+  cat(paste("Missing values in '", name, "':\n", sep = ""))
+  print(na_counts)
+  cat("\n")
+}
 
-# Display the NA counts for each column
-cat("Missing values in 'dta':\n")
-print(na_counts)
-cat("\n")
+# Display missing values before imputation
+display_na_counts(dta, "dta")
+display_na_counts(scoring, "scoring")
 
-# Get the count of NaN (NA) values for each column
-na_counts <- sapply(scoring, function(x) sum(is.na(x)))
+# Define imputation methods, excluding 'outcome' column from dta
+method_dta <- make.method(dta)
+method_dta["outcome"] <- ""
 
-# Display the NA counts for each column
-cat("Missing values in 'scoring':\n")
-print(na_counts)
+# Perform imputation on both datasets: KNN Imputation
+dta_imputed <- mice(dta, method = method_dta, m = 5)
+scoring_imputed <- mice(scoring, method = 'pmm', m = 5)
+
+# Suppress any output while extracting the complete data after imputation
+invisible(dta_complete <- complete(dta_imputed))
+invisible(scoring_complete <- complete(scoring_imputed))
+
+# Display missing values after imputation
+display_na_counts(dta_complete, "dta (complete)")
+display_na_counts(scoring_complete, "scoring (complete)")
 ```
 
 Perform PCA to Visualize Groups
 
 ```{r}
-# Create a renamed copy of the data without the "outcomes" field
-dta_renamed <- dta %>% select(-outcome)
+dta_complete_group_renamed <- dta_complete %>%
+  mutate(group = paste("dta_complete:", group))
+
+scoring_complete_group_renamed <- scoring_complete %>%
+  mutate(group = paste("scoring_complete:", group))
+
+# Create a renamed copy of the data without the "outcome" field
+dta_renamed <- dta_complete_group_renamed %>% select(-outcome)
 
 # Combine dta_renamed and scoring vertically (row-wise)
-combined_part_2_data <- bind_rows(dta_renamed, scoring)
+combined_part_2_data <- bind_rows(dta_renamed, scoring_complete_group_renamed)
 
-# Select only the numeric columns for PCA
+# Retain the 'group' column separately
+group_column <- combined_part_2_data$group
+
+# Select only the numeric columns for PCA (excluding 'group')
 numeric_data <- combined_part_2_data %>% select(where(is.numeric))
 
 # Perform PCA and reduce to 2 principal components
@@ -752,8 +778,102 @@ pca_data <- as.data.frame(pca_result$x[, 1:2])
 # Rename the principal components for clarity
 colnames(pca_data) <- c("PC1", "PC2")
 
-# View the resulting dataset with 2 principal components
-head(pca_data)
+# Add the 'group' column back to the PCA data
+pca_data_with_group <- cbind(group = group_column, pca_data)
+
+# Create a 2D scatter plot with different colors for each group
+ggplot(pca_data_with_group, aes(x = PC1, y = PC2, color = group)) +
+  geom_point(size = 3) +
+  labs(title = "PCA Plot with Clusters by Group",
+       x = "Principal Component 1",
+       y = "Principal Component 2") +
+  theme_minimal() +
+  theme(legend.title = element_blank())  # Remove legend title
+```
+
+```{r}
+# Rename 'group' column in both datasets
+dta_complete_group_renamed <- dta_complete %>%
+  mutate(group = paste("dta_complete:", group))
+
+scoring_complete_group_renamed <- scoring_complete %>%
+  mutate(group = paste("scoring_complete:", group))
+
+# Create a renamed copy of the data without the "outcome" field
+dta_renamed <- dta_complete_group_renamed %>% select(-outcome)
+
+# Combine dta_renamed and scoring_complete vertically (row-wise)
+combined_part_2_data <- bind_rows(dta_renamed, scoring_complete_group_renamed)
+
+# Retain the 'group' column separately
+group_column <- combined_part_2_data$group
+
+# Select only the numeric columns for t-SNE (excluding 'group')
+numeric_data <- combined_part_2_data %>% select(where(is.numeric))
+
+# Perform t-SNE on the numeric data
+tsne_result <- Rtsne(
+  numeric_data,
+  dims = 2,
+  perplexity = 30,
+  verbose = FALSE
+)
+
+# Convert the t-SNE result into a data frame
+tsne_data <- as.data.frame(tsne_result$Y)
+
+# Rename the t-SNE components for clarity
+colnames(tsne_data) <- c("TSNE1", "TSNE2")
+
+# Add the 'group' column back to the t-SNE data
+tsne_data_with_group <- cbind(group = group_column, tsne_data)
+
+# Create a 2D scatter plot with different colors for each group
+ggplot(tsne_data_with_group, aes(x = TSNE1, y = TSNE2, color = group)) +
+  geom_point(size = 3) +
+  labs(title = "t-SNE Plot with Clusters by Group", x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal() +
+  theme(legend.title = element_blank())  # Remove legend title
+```
+
+```{r}
+# Rename 'group' column in both datasets
+dta_complete_group_renamed <- dta_complete %>%
+  mutate(group = paste("dta_complete:", group))
+
+scoring_complete_group_renamed <- scoring_complete %>%
+  mutate(group = paste("scoring_complete:", group))
+
+# Create a renamed copy of the data without the "outcome" field
+dta_renamed <- dta_complete_group_renamed %>% select(-outcome)
+
+# Combine dta_renamed and scoring_complete vertically (row-wise)
+combined_part_2_data <- bind_rows(dta_renamed, scoring_complete_group_renamed)
+
+# Retain the 'group' column separately
+group_column <- combined_part_2_data$group
+
+# Select only the numeric columns for UMAP (excluding 'group')
+numeric_data <- combined_part_2_data %>% select(where(is.numeric))
+
+# Perform UMAP on the numeric data
+umap_result <- umap(numeric_data)
+
+# Convert UMAP result into a data frame
+umap_data <- as.data.frame(umap_result$layout)
+
+# Rename the UMAP components for clarity
+colnames(umap_data) <- c("UMAP1", "UMAP2")
+
+# Add the 'group' column back to the UMAP data
+umap_data_with_group <- cbind(group = group_column, umap_data)
+
+# Create a 2D scatter plot with different colors for each group
+ggplot(umap_data_with_group, aes(x = UMAP1, y = UMAP2, color = group)) +
+  geom_point(size = 3) +
+  labs(title = "UMAP Plot with Clusters by Group", x = "UMAP 1", y = "UMAP 2") +
+  theme_minimal() +
+  theme(legend.title = element_blank())  # Remove legend title
 ```
 
 \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
@@ -783,3 +903,10 @@ This learning problem falls under **semi-supervised learning**, which combines l
 6.  **Semi-supervised Algorithms**: The choice of a semi-supervised algorithm, such as Label Propagation, Self-learning, or Generative Models, impacts how well you can use both datasets. Many conventional algorithms like decision trees or linear models won’t naturally extend to semi-supervised scenarios.
 
 Each of these issues will need specific strategies for data preparation, model selection, and evaluation to get robust results.
+
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+**Question b.**
+
+Describe the statistical learning problem. Explain the difficulties in training a model with the above dataset.
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
