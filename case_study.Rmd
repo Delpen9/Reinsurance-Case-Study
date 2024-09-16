@@ -6,6 +6,8 @@ output: pdf_document
 *Load in the important libraries.*
 
 ```{r}
+library(car)
+library(iml)
 library(xgboost)
 library(pROC)
 library(caret)
@@ -599,16 +601,13 @@ ggplot(all_costs_data, aes(x = Cost)) +
   theme_minimal()
 ```
 
-## **Problem 2 – Statistical learning**		
+## **Problem 2 – Statistical learning**
 
-The following code loads the data used in Problem 2. The data is stored in two .csv files containing a data
-set and a scoring set, respectively. These data are NOT related to Problem 1.
+The following code loads the data used in Problem 2. The data is stored in two .csv files containing a data set and a scoring set, respectively. These data are NOT related to Problem 1.
 
 ![](images/clipboard-2248034987.png)
 
-The goal of this problem is to predict the value of the variable outcome in the dataset defined above. The
-measure of goodness of fit is the area under the receiver operating characteristic curve (AUC) and will be
-measured on the scoring set.
+The goal of this problem is to predict the value of the variable outcome in the dataset defined above. The measure of goodness of fit is the area under the receiver operating characteristic curve (AUC) and will be measured on the scoring set.
 
 ```{r}
 dta <- read_csv(
@@ -655,7 +654,7 @@ ggplot(combined_data, aes(x = group, y = percentage, fill = dataset)) +
   theme_minimal()
 ```
 
-#### **Observation:** The "scoring" set contains a different Group, C, from the "dta" set containing the group, D. It may be worth checking to see if the Groups from both datasets derive from the same distribution or if the naming is erroneous. 
+#### **Observation:** The "scoring" set contains a different Group, C, from the "dta" set containing the group, D. It may be worth checking to see if the Groups from both datasets derive from the same distribution or if the naming is erroneous.
 
 Perform the KS-test across distributions:
 
@@ -915,10 +914,9 @@ Given the current challenges and the poor performance of clustering on the “sc
 
 \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
-**Question b.**			
+**Question b.**
 
-The variable group has different factor levels in the data and scoring set. How will this difference impact
-your predictive model? What solutions might you offer?
+The variable group has different factor levels in the data and scoring set. How will this difference impact your predictive model? What solutions might you offer?
 
 \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
@@ -944,13 +942,13 @@ Selected approach: 6.
 
 \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
-**Question c.**				
+**Question c.**
 
-Train a model to predict outcome. You are free to use any package in R. Explain the logical progression
-that leads you to your final solution. Be prepared to interrogate relationships within the model (i.e., how each
-variable impacts the model and their relationship to the outcome)
+Train a model to predict outcome. You are free to use any package in R. Explain the logical progression that leads you to your final solution. Be prepared to interrogate relationships within the model (i.e., how each variable impacts the model and their relationship to the outcome)
 
 \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+![](images/clipboard-283427932.png)
 
 ### Pre-process the Training Set
 
@@ -989,6 +987,8 @@ dta_complete_one_hot <- cbind(dta_complete, one_hot_encoded_df)
 
 # Drop the original "group" column from dta_complete_one_hot
 dta_complete_one_hot <- dta_complete_one_hot[, !names(dta_complete_one_hot) %in% "group"]
+
+dta_complete_one_hot <- dta_complete_one_hot[, !(colnames(dta_complete_one_hot) %in% "groupimpute")]
 ```
 
 ### Pre-process the Scoring Set
@@ -1016,6 +1016,8 @@ scoring_complete_one_hot <- cbind(scoring_complete, one_hot_encoded_df)
 
 # Drop the original "group" column from scoring_complete_one_hot
 scoring_complete_one_hot <- scoring_complete_one_hot[, !names(scoring_complete_one_hot) %in% "group"]
+
+scoring_complete_one_hot <- scoring_complete_one_hot[, !(colnames(scoring_complete_one_hot) %in% "groupimpute")]
 ```
 
 ### Get a Holdout Set from the Training Set
@@ -1146,12 +1148,70 @@ ggplot(roc_df, aes(x = FalsePositiveRate, y = TruePositiveRate)) +
   )  # AUC annotation
 ```
 
+```{r}
+# Extracting the coefficients from the logistic model
+feature_importances <- coef(logistic_model_cv$finalModel)
+
+# Create a data frame for plotting
+feature_importances_df <- data.frame(
+  Feature = names(feature_importances),
+  Importance = abs(feature_importances)
+)
+
+# Sort the features by importance
+feature_importances_df <- feature_importances_df[order(-feature_importances_df$Importance), ]
+
+# Create a bar plot using ggplot2
+ggplot(feature_importances_df, aes(x = reorder(Feature, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates to make the plot horizontal
+  theme_minimal() +
+  labs(title = "Feature Importances from Logistic Regression", x = "Features", y = "Absolute Coefficient Value") +
+  theme(
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
+```
+
+```{r}
+# Predict probabilities using the caret model
+predicted_probs <- predict(logistic_model_cv, newdata = training_set, type = "prob")
+
+# Assuming binary classification, extract the probability of the positive class
+# Adjust 'Class1' with the actual name of your positive class in the model output
+predicted_probs_positive <- predicted_probs[, "1"]
+
+# Extract the feature importances (coefficients)
+feature_importances <- coef(logistic_model_cv$finalModel)
+
+# Calculate feature contributions for the first observation
+# For each feature, calculate its contribution based on feature importance
+contributions <- training_set[1, ] * feature_importances
+
+# Create a data frame for plotting feature contributions for the first observation
+contributions_df <- data.frame(Feature = colnames(training_set),
+                               Contributions = as.numeric(contributions))
+
+# Example bar plot for the first observation
+ggplot(contributions_df, aes(x = reorder(Feature, Contributions), y = Contributions)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Feature Contributions", x = "Features", y = "Contribution to Log-Odds")
+```
+
+**Top Contributing Features:**
+
+-   Feature q has the largest negative contribution to the log-odds, meaning it is a strong predictor in favor of the negative class for this specific observation.
+
+-   Other features (r, s, and groupb) have positive contributions but are relatively small compared to q.
+
 \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
-**Question d.**		
+**Question d.**
 
-Give an estimate of the AUC you expect on the scoring set. Discuss the choice of AUC as the performance
-measure (e.g. instead of accuracy).
+Give an estimate of the AUC you expect on the scoring set. Discuss the choice of AUC as the performance measure (e.g. instead of accuracy).
 
 \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
@@ -1207,3 +1267,5 @@ ggplot(roc_df_holdout, aes(x = FalsePositiveRate, y = TruePositiveRate)) +
     color = "red"
   )  # AUC annotation
 ```
+
+AUC (Area Under the ROC Curve) is a better evaluation metric than accuracy for imbalanced datasets because it considers the performance of a model across all possible classification thresholds, focusing on the trade-off between true positive and false positive rates. Accuracy can be misleading in imbalanced datasets, as it may overestimate performance by focusing on the majority class, ignoring the minority class where the model might be performing poorly. AUC, on the other hand, provides a more balanced assessment by measuring how well the model distinguishes between the positive and negative classes, regardless of their proportions.
