@@ -344,9 +344,11 @@ summary_stats <- combined_data %>%
   summarize(
     mean_value = mean(DeathSI, na.rm = TRUE),
     sd_value = sd(DeathSI, na.rm = TRUE),
-    q25 = quantile(DeathSI, 0.25, na.rm = TRUE),
+    q20 = quantile(DeathSI, 0.20, na.rm = TRUE),
+    q40 = quantile(DeathSI, 0.40, na.rm = TRUE),
     median_value = median(DeathSI, na.rm = TRUE),
-    q75 = quantile(DeathSI, 0.75, na.rm = TRUE)
+    q60 = quantile(DeathSI, 0.60, na.rm = TRUE),
+    q80 = quantile(DeathSI, 0.80, na.rm = TRUE),
   )
 
 # View the result
